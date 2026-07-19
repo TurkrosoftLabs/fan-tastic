@@ -1,0 +1,590 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Binaural Fan Simulator</title>
+<style>
+  :root { color-scheme: dark; }
+  body {
+    background: radial-gradient(ellipse at center, #1a1f2e 0%, #05070d 100%);
+    color: #d8dee9;
+    font-family: 'SF Mono', Menlo, Consolas, monospace;
+    margin: 0; padding: 24px; min-height: 100vh;
+  }
+  h1 { font-size: 18px; letter-spacing: 2px; color: #88c0d0; margin: 0 0 6px; }
+  #help { color: #6a7589; font-size: 12px; margin-bottom: 20px; line-height: 1.6; }
+  kbd {
+    background: #2e3440; border: 1px solid #4c566a; border-radius: 3px;
+    padding: 1px 6px; font-size: 11px; color: #eceff4;
+  }
+  #fans { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; }
+  .fan {
+    background: rgba(20, 25, 35, 0.7);
+    border: 1px solid #2e3440;
+    border-radius: 8px;
+    padding: 14px;
+    transition: all 0.2s;
+    cursor: pointer;
+    user-select: none;
+  }
+  .fan:hover { border-color: #4c566a; }
+  .fan.selected { border-color: #88c0d0; box-shadow: 0 0 20px rgba(136, 192, 208, 0.2); }
+  .fan.running { background: rgba(20, 40, 30, 0.7); }
+  .fan.running .status { color: #a3be8c; }
+  .name { font-size: 14px; color: #eceff4; margin-bottom: 6px; }
+  .status { font-size: 11px; color: #6a7589; margin-bottom: 4px; }
+  .level-bar {
+    display: flex; gap: 4px; margin-top: 8px;
+  }
+  .level-bar span {
+    flex: 1; height: 4px; background: #2e3440; border-radius: 2px;
+    transition: background 0.2s;
+  }
+  .level-bar span.active { background: #88c0d0; }
+  .pos { font-size: 10px; color: #4c566a; margin-top: 6px; }
+  #boot {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.85);
+    display: flex; align-items: center; justify-content: center;
+    z-index: 100; cursor: pointer;
+  }
+  #boot div {
+    background: #2e3440; padding: 30px 50px; border-radius: 10px;
+    border: 1px solid #4c566a; text-align: center;
+  }
+  #boot h2 { margin: 0 0 10px; color: #88c0d0; font-size: 16px; }
+  #boot p { margin: 0; color: #d8dee9; font-size: 13px; }
+</style>
+</head>
+<body>
+
+<div id="boot">
+  <div>
+    <h2>🌀 Binaural Fan Simulator</h2>
+    <p>Click anywhere to enable 3D audio (HRTF)</p>
+  </div>
+</div>
+
+<h1>BINAURAL FAN SIMULATOR</h1>
+<div id="help">
+  <kbd>1</kbd>–<kbd>5</kbd> select fan &nbsp;·&nbsp;
+  <kbd>↑</kbd>/<kbd>↓</kbd> power / thermal state &nbsp;·&nbsp;
+  <kbd>Enter</kbd> start/stop &nbsp;·&nbsp;
+  <kbd>←</kbd>/<kbd>→</kbd> rotate listener &nbsp;·&nbsp;
+  2 kHz beep on remote-controlled fan events
+</div>
+<div id="fans"></div>
+
+<script>
+(() => {
+  'use strict';
+
+  let ctx, listener, noiseBuffer;
+  let listenerAngle = 0;
+
+  async function boot() {
+    if (ctx) return;
+    ctx = new (window.AudioContext || window.webkitAudioContext)();
+    
+    if (ctx.state === 'suspended') {
+      await ctx.resume();
+    }
+    
+    listener = ctx.listener;
+    if (listener.positionX) {
+      listener.positionX.value = 0;
+      listener.positionY.value = 1.6;
+      listener.positionZ.value = 0;
+      listener.forwardX.value = 0;
+      listener.forwardY.value = 0;
+      listener.forwardZ.value = -1;
+      listener.upX.value = 0;
+      listener.upY.value = 1;
+      listener.upZ.value = 0;
+    } else {
+      listener.setPosition(0, 1.6, 0);
+      listener.setOrientation(0, 0, -1, 0, 1, 0);
+    }
+    noiseBuffer = makeNoiseBuffer(ctx);
+    buildFans();
+    document.getElementById('boot').style.display = 'none';
+  }
+
+  function makeNoiseBuffer(ctx) {
+    const sr = ctx.sampleRate;
+    const len = sr * 3;
+    const buf = ctx.createBuffer(2, len, sr);
+    for (let c = 0; c < 2; c++) {
+      const d = buf.getChannelData(c);
+      let b0=0,b1=0,b2=0,b3=0,b4=0,b5=0,b6=0;
+      for (let i = 0; i < len; i++) {
+        const white = Math.random() * 2 - 1;
+        b0 = 0.99886*b0 + white*0.0555179;
+        b1 = 0.99332*b1 + white*0.0750759;
+        b2 = 0.96900*b2 + white*0.1538520;
+        b3 = 0.86650*b3 + white*0.3104856;
+        b4 = 0.55000*b4 + white*0.5329522;
+        b5 = -0.7616*b5 - white*0.0168980;
+        const pink = (b0+b1+b2+b3+b4+b5+b6 + white*0.5362) * 0.11;
+        b6 = white * 0.115926;
+        d[i] = pink * 0.7 + white * 0.3;
+      }
+    }
+    return buf;
+  }
+
+  const CONFIGS = [
+    {
+      key: 'ac', name: 'Air Conditioner', pos: [-2.2, 1.4, -2.0],
+      beeps: true,
+      levels: [
+        { rate: 0.40, gain: 0.20, bladePass: 56, amDepth: 0.012, filterFreq: 850, label: 'Low' },
+        { rate: 0.70, gain: 0.35, bladePass: 102, amDepth: 0.021, filterFreq: 925, label: 'Medium' },
+        { rate: 1.00, gain: 0.50, bladePass: 140, amDepth: 0.030, filterFreq: 1000, label: 'High' }
+      ],
+      hum: { freq: 60, gain: 0.06 },
+      motorPeak: { freq: 180, Q: 2.5, gain: 1 },
+      turbRate: 1.6, turbDepth: 40
+    },
+    {
+      key: 'desk', name: 'Desk Fan', pos: [1.6, 1.05, -1.4],
+      beeps: true,
+      levels: [
+        { rate: 0.40, gain: 0.26, bladePass: 40, amDepth: 0.08, filterFreq: 720, label: 'Low' },
+        { rate: 0.70, gain: 0.46, bladePass: 70, amDepth: 0.14, filterFreq: 1260, label: 'Medium' },
+        { rate: 1.00, gain: 0.65, bladePass: 100, amDepth: 0.2, filterFreq: 1800, label: 'High' }
+      ],
+      hum: null,
+      motorPeak: { freq: 320, Q: 1.5, gain: 2 },
+      turbRate: 1.4, turbDepth: 45
+    },
+    {
+      key: 'tower', name: 'Tower Fan', pos: [2.6, 1.0, 0.1],
+      beeps: true,
+      levels: [
+        { rate: 0.4, gain: 0.28, bladePass: 48, amDepth: 0.4, filterFreq: 650, label: 'Low' },
+        { rate: 0.7, gain: 0.49, bladePass: 84, amDepth: 0.7, filterFreq: 850, label: 'Medium' },
+        { rate: 1.00, gain: 0.7, bladePass: 120, amDepth: 1, filterFreq: 1050, label: 'High' }
+      ],
+      hum: null,
+      motorPeak: { freq: 240, Q: 2.0, gain: 3 },
+      turbRate: 1.4, turbDepth: 80
+    },
+    {
+      key: 'ceiling', name: 'Ceiling Fan', pos: [0.0, 2.9, 0.0],
+      beeps: true,
+      levels: [
+        { rate: 0.28, gain: 0.40, bladePass: 6, amDepth: 0.06, filterFreq: 280, label: 'Low' },
+        { rate: 0.55, gain: 0.55, bladePass: 11, amDepth: 0.11, filterFreq: 380, label: 'Medium' },
+        { rate: 0.9, gain: 0.72, bladePass: 18, amDepth: 0.18, filterFreq: 500, label: 'High' }
+      ],
+      hum: null,
+      motorPeak: { freq: 95, Q: 3.0, gain: 5 },
+      turbRate: 0.6, turbDepth: 20
+    },
+    {
+      key: 'computer', name: 'Computer Fan (CPU)', pos: [0.9, 0.55, -0.4],
+      beeps: false,
+      levels: [
+        { rate: 0.2, gain: 0.02, bladePass: 60, amDepth: 0.04, filterFreq: 600, label: 'Idle · Cool' },
+        { rate: 0.6, gain: 0.06, bladePass: 180,  amDepth: 0.07, filterFreq: 1800, label: 'Load · Warm' },
+        { rate: 1.00, gain: 0.10, bladePass: 300, amDepth: 0.1, filterFreq: 3000, label: 'Hot · Throttling' }
+      ],
+      hum: null,
+      motorPeak: { freq: 3000, Q: 7.0, gain: 9 },
+      coilWhine: { freq: 6000, Q: 12, gain: 6 },
+      turbRate: 2.5, turbDepth: 150
+    }
+  ];
+
+  class Fan {
+    constructor(cfg) {
+      this.cfg = cfg;
+      this.on = false;
+      this.level = 0;
+      this.nodes = {};
+      this.flutterTimer = null;
+      this.build();
+    }
+
+    build() {
+      const c = this.ctx = ctx;
+      const cfg = this.cfg;
+
+      const src = c.createBufferSource();
+      src.buffer = noiseBuffer;
+      src.loop = true;
+      this.nodes.src = src;
+
+      const hp = c.createBiquadFilter();
+      hp.type = 'highpass';
+      hp.frequency.value = cfg.key === 'ceiling' ? 35 : (cfg.key === 'computer' ? 900 : 80);
+      hp.Q.value = 0.7;
+
+      const tone = c.createBiquadFilter();
+      const drift = c.createBufferSource();
+      drift.buffer = noiseBuffer;
+      drift.loop = true;
+      const driftLP = c.createBiquadFilter();
+      driftLP.type = "lowpass";
+      driftLP.frequency.value = 0.35;
+      const driftDepth = c.createGain();
+      driftDepth.gain.value = 60;
+      drift.connect(driftLP);
+      driftLP.connect(driftDepth);
+      driftDepth.connect(tone.frequency);
+      this.nodes.drift = drift;
+      if (cfg.key === 'ac') {
+        tone.type = 'lowpass'; tone.frequency.value = 900; tone.Q.value = 0.6;
+      } else if (cfg.key === 'desk') {
+        tone.type = 'lowpass'; tone.frequency.value = 1400; tone.Q.value = 0.7;
+      } else if (cfg.key === 'tower') {
+        tone.type = 'bandpass'; tone.frequency.value = 750; tone.Q.value = 1.0;
+      } else if (cfg.key === 'ceiling') {
+        tone.type = 'lowpass'; tone.frequency.value = 380; tone.Q.value = 0.5;
+      } else {
+        tone.type = 'bandpass'; tone.frequency.value = 2600; tone.Q.value = 1.0;
+      }
+      this.nodes.tone = tone;
+
+      const peak = c.createBiquadFilter();
+      peak.type = 'peaking';
+      peak.frequency.value = cfg.motorPeak.freq;
+      peak.Q.value = cfg.motorPeak.Q;
+      peak.gain.value = cfg.motorPeak.gain;
+      this.nodes.peak = peak;
+
+      let coil = null;
+      if (cfg.coilWhine) {
+        coil = c.createBiquadFilter();
+        coil.type = 'peaking';
+        coil.frequency.value = cfg.coilWhine.freq;
+        coil.Q.value = cfg.coilWhine.Q;
+        coil.gain.value = cfg.coilWhine.gain;
+        this.nodes.coil = coil;
+      }
+
+      const turbNoise = c.createBufferSource();
+      turbNoise.buffer = noiseBuffer;
+      turbNoise.loop = true;
+      const turbLP = c.createBiquadFilter();
+      turbLP.type = 'lowpass';
+      turbLP.frequency.value = cfg.turbRate * 2.5;
+      const turbDepth = c.createGain();
+      turbDepth.gain.value = cfg.turbDepth;
+      turbNoise.connect(turbLP);
+      turbLP.connect(turbDepth);
+      turbDepth.connect(tone.frequency);
+      this.nodes.turbNoise = turbNoise;
+
+      const amNoise = c.createBufferSource();
+      amNoise.buffer = noiseBuffer;
+      amNoise.loop = true;
+      const amLP = c.createBiquadFilter();
+      amLP.type = "lowpass";
+      amLP.frequency.value = 18;
+      const amMix = c.createGain();
+      amMix.gain.value = 0;
+      amNoise.connect(amLP);
+      amLP.connect(amMix);
+      const amGain = c.createGain();
+      amGain.gain.value = 1;
+      // ---------- Blade-pass modulation ----------
+      const bladeOsc = c.createOscillator();
+      bladeOsc.type = "triangle";
+      const bladeDepth = c.createGain();
+      bladeDepth.gain.value = 0;
+      const bladeOffset = c.createConstantSource();
+      bladeOffset.offset.value = 1;
+      bladeOsc.connect(bladeDepth);
+      bladeDepth.connect(amGain.gain);
+      bladeOffset.connect(amGain.gain);
+      this.nodes.bladeOsc = bladeOsc;
+      this.nodes.bladeDepth = bladeDepth;
+      this.nodes.bladeOffset = bladeOffset;
+      amMix.connect(amGain.gain);
+      this.nodes.amNoise = amNoise;
+      this.nodes.amMix = amMix;
+      this.nodes.amGain = amGain;
+
+      let humOsc = null, humGain = null;
+      if (cfg.hum) {
+        humOsc = c.createOscillator();
+        humOsc.type = 'sine';
+        humOsc.frequency.value = cfg.hum.freq;
+        humGain = c.createGain();
+        humGain.gain.value = 0;
+        humOsc.connect(humGain);
+        this.nodes.humOsc = humOsc;
+        this.nodes.humGain = humGain;
+      }
+
+      const master = c.createGain();
+      master.gain.value = 0;
+      this.nodes.master = master;
+
+      const panner = c.createPanner();
+      panner.panningModel = 'HRTF';
+      panner.distanceModel = 'inverse';
+      panner.refDistance = 1;
+      panner.maxDistance = 50;
+      panner.rolloffFactor = 1;
+      panner.coneInnerAngle = 360;
+      panner.coneOuterAngle = 0;
+      panner.setPosition(cfg.pos[0], cfg.pos[1], cfg.pos[2]);
+      this.nodes.panner = panner;
+
+      src.connect(hp); hp.connect(tone); tone.connect(peak);
+      let last = peak;
+      if (coil) { last.connect(coil); last = coil; }
+      last.connect(amGain);
+      amGain.connect(master);
+      if (humGain) humGain.connect(master);
+      master.connect(panner);
+      panner.connect(c.destination);
+    }
+
+    applyLevel(immediate = false) {
+      const L = this.cfg.levels[this.level];
+      const t = ctx.currentTime;
+      const tau = immediate ? 0.01 : 0.5;
+
+      this.nodes.src.playbackRate.cancelScheduledValues(t);
+      if (immediate) this.nodes.src.playbackRate.setValueAtTime(L.rate, t);
+      else this.nodes.src.playbackRate.setTargetAtTime(L.rate, t, tau);
+
+      this.nodes.master.gain.cancelScheduledValues(t);
+      if (immediate) this.nodes.master.gain.setValueAtTime(L.gain, t);
+      else this.nodes.master.gain.setTargetAtTime(L.gain, t, tau);
+
+      this.nodes.amMix.gain.setTargetAtTime(L.amDepth, t, tau);
+
+      this.nodes.bladeOsc.frequency.setTargetAtTime(L.bladePass, t, tau);
+
+      // subtle pressure pulses
+      this.nodes.bladeDepth.gain.setTargetAtTime(L.amDepth * 0.3, t, tau);
+
+      this.nodes.tone.frequency.setTargetAtTime(L.filterFreq, t, tau);
+
+      if (this.nodes.humGain) {
+        this.nodes.humGain.gain.setTargetAtTime(this.on ? this.cfg.hum.gain * (0.6 + 0.4 * (this.level/2)) : 0, t, tau);
+      }
+
+      if (this.nodes.coil) {
+        const coilGain = this.on ? this.cfg.coilWhine.gain * (this.level / 2) : 0;
+        this.nodes.coil.gain.setTargetAtTime(coilGain, t, tau);
+      }
+    }
+
+    start() {
+      if (this.on) return;
+      this.on = true;
+      const L = this.cfg.levels[this.level];
+      const t = ctx.currentTime;
+
+      this.nodes.src.start(t);
+      this.nodes.amNoise.start(t);
+      this.nodes.turbNoise.start(t);
+      this.nodes.bladeOsc.start(t);
+      this.nodes.bladeOffset.start(t);
+      this.nodes.drift.start(t);
+      if (this.nodes.humOsc) this.nodes.humOsc.start(t);
+
+      this.nodes.src.playbackRate.cancelScheduledValues(t);
+      this.nodes.src.playbackRate.setValueAtTime(0.1, t);
+      this.nodes.src.playbackRate.exponentialRampToValueAtTime(L.rate, t + 1.5);
+
+      this.nodes.master.gain.cancelScheduledValues(t);
+      this.nodes.master.gain.setValueAtTime(0, t);
+      this.nodes.master.gain.linearRampToValueAtTime(L.gain, t + 1.6);
+
+      this.applyLevel(false);
+      this.startFlutter();
+    }
+
+    stop() {
+      if (!this.on) return;
+      this.on = false;
+      this.stopFlutter();
+      const t = ctx.currentTime;
+
+      this.nodes.src.playbackRate.cancelScheduledValues(t);
+      const cur = Math.max(0.1, this.nodes.src.playbackRate.value);
+      this.nodes.src.playbackRate.setValueAtTime(cur, t);
+      this.nodes.src.playbackRate.exponentialRampToValueAtTime(0.05, t + 2.2);
+
+      this.nodes.master.gain.cancelScheduledValues(t);
+      this.nodes.master.gain.setValueAtTime(this.nodes.master.gain.value, t);
+      this.nodes.master.gain.linearRampToValueAtTime(0.0, t + 2.4);
+
+      if (this.nodes.humGain) {
+        this.nodes.humGain.gain.cancelScheduledValues(t);
+        this.nodes.humGain.gain.linearRampToValueAtTime(0, t + 1.5);
+      }
+      if (this.nodes.coil) {
+        this.nodes.coil.gain.cancelScheduledValues(t);
+        this.nodes.coil.gain.linearRampToValueAtTime(0, t + 1.5);
+      }
+    }
+
+startFlutter() {
+  this.stopFlutter();
+
+  const update = () => {
+    if (!this.on) return;
+
+    const base = this.cfg.levels[this.level].rate;
+
+    const bladeBase = this.cfg.levels[this.level].bladePass;
+
+    // ±0.2% speed variation
+    const flutter = 1 + (Math.random() - 0.5) * 0.002;
+
+    this.nodes.src.playbackRate.setTargetAtTime(
+      base * flutter,
+      ctx.currentTime,
+      0.7
+    );
+
+    const bladeFlutter = 1 + (Math.random() - 0.5) * 0.01;
+
+    this.nodes.bladeOsc.frequency.setTargetAtTime(
+      bladeBase * bladeFlutter,
+      ctx.currentTime,
+      0.8
+    );
+
+    this.flutterTimer = setTimeout(
+      update,
+      600 + Math.random() * 1200
+    );
+  };
+
+  update();
+}
+
+stopFlutter() {
+  if (this.flutterTimer) {
+    clearTimeout(this.flutterTimer);
+    this.flutterTimer = null;
+  }
+}
+
+    setLevel(n) {
+      n = Math.max(0, Math.min(this.cfg.levels.length - 1, n));
+      if (n === this.level) return;
+      this.level = n;
+      if (this.on) this.applyLevel(false);
+    }
+  }
+
+  function beep() {
+    if (!ctx) return;
+    const t = ctx.currentTime;
+    const osc = ctx.createOscillator();
+    const g = ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(2000, t);
+    g.gain.setValueAtTime(0, t);
+    g.gain.linearRampToValueAtTime(0.18, t + 0.008);
+    g.gain.exponentialRampToValueAtTime(0.001, t + 0.11);
+    osc.connect(g); g.connect(ctx.destination);
+    osc.start(t); osc.stop(t + 0.13);
+  }
+
+  const fans = [];
+  let selected = 0;
+  const container = document.getElementById('fans');
+
+  function buildFans() {
+    CONFIGS.forEach((cfg, i) => {
+      const fan = new Fan(cfg);
+      fans.push(fan);
+
+      const el = document.createElement('div');
+      el.className = 'fan';
+      el.dataset.idx = i;
+      el.innerHTML = `
+        <div class="name">${cfg.name}</div>
+        <div class="status">OFF · ${cfg.levels[0].label}</div>
+        <div class="level-bar">
+          <span></span><span></span><span></span>
+        </div>
+        <div class="pos">pos (${cfg.pos.map(v=>v.toFixed(1)).join(', ')})</div>
+      `;
+      el.addEventListener('click', () => {
+        selected = i;
+        render();
+      });
+      container.appendChild(el);
+    });
+    render();
+  }
+
+  function render() {
+    const els = container.querySelectorAll('.fan');
+    els.forEach((el, i) => {
+      const f = fans[i];
+      el.classList.toggle('selected', i === selected);
+      el.classList.toggle('running', f.on);
+      const st = el.querySelector('.status');
+      st.textContent = (f.on ? 'ON' : 'OFF') + ' · ' + f.cfg.levels[f.level].label;
+      const bars = el.querySelectorAll('.level-bar span');
+      bars.forEach((b, j) => b.classList.toggle('active', j <= f.level));
+    });
+  }
+
+  window.addEventListener('keydown', (e) => {
+    if (!ctx) return;
+    if (e.key >= '1' && e.key <= '5') {
+      selected = parseInt(e.key, 10) - 1;
+      render();
+      e.preventDefault();
+    } else if (e.key === 'ArrowUp') {
+      const f = fans[selected];
+      f.setLevel(f.level + 1);
+      if (f.cfg.beeps && f.on) beep();
+      render();
+      e.preventDefault();
+    } else if (e.key === 'ArrowDown') {
+      const f = fans[selected];
+      f.setLevel(f.level - 1);
+      if (f.cfg.beeps && f.on) beep();
+      render();
+      e.preventDefault();
+    } else if (e.key === 'Enter') {
+      const f = fans[selected];
+      if (f.on) f.stop(); else f.start();
+      if (f.cfg.beeps) beep();
+      render();
+      e.preventDefault();
+    } else if (e.key === 'ArrowLeft') {
+      listenerAngle -= 0.2;
+      updateListener();
+      e.preventDefault();
+    } else if (e.key === 'ArrowRight') {
+      listenerAngle += 0.2;
+      updateListener();
+      e.preventDefault();
+    }
+  });
+
+  function updateListener() {
+    if (!listener) return;
+    const fx = -Math.sin(listenerAngle);
+    const fz = -Math.cos(listenerAngle);
+    if (listener.forwardX) {
+      listener.forwardX.value = fx;
+      listener.forwardZ.value = fz;
+      listener.upX.value = 0; listener.upY.value = 1; listener.upZ.value = 0;
+    } else {
+      listener.setOrientation(fx, 0, fz, 0, 1, 0);
+    }
+  }
+
+  document.getElementById('boot').addEventListener('click', boot, { once: true });
+  document.getElementById('boot').addEventListener('touchstart', boot, { once: true });
+
+})();
+</script>
+</body>
+</html>
