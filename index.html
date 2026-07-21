@@ -143,10 +143,11 @@
       ],
       hum: { freq: 60, gain: 0.06 },
       motorPeak: { freq: 180, Q: 2.5, gain: 1 },
+      housing: { freq: 165, Q: 1.3, gain: 2 },
       turbRate: 1.6, turbDepth: 40
     },
     {
-      key: 'desk', name: 'Desk Fan', pos: [1.6, 1.05, -1.4],
+      key: 'desk', name: 'Desk Fan', pos: [1.6, 0.75, -1.4],
       beeps: true,
       levels: [
         { rate: 0.40, gain: 0.26, bladePass: 40, amDepth: 0.08, filterFreq: 720, label: 'Low' },
@@ -154,44 +155,48 @@
         { rate: 1.00, gain: 0.65, bladePass: 100, amDepth: 0.2, filterFreq: 1800, label: 'High' }
       ],
       hum: null,
-      motorPeak: { freq: 320, Q: 1.5, gain: 2 },
+      motorPeak: { freq: 320, Q: 1.5, gain: 0.8 },
+      housing: { freq: 520, Q: 2.2, gain: 2.8 },
       turbRate: 1.4, turbDepth: 45
     },
     {
       key: 'tower', name: 'Tower Fan', pos: [2.6, 1.0, 0.1],
       beeps: true,
       levels: [
-        { rate: 0.4, gain: 0.28, bladePass: 48, amDepth: 0.4, filterFreq: 650, label: 'Low' },
-        { rate: 0.7, gain: 0.49, bladePass: 84, amDepth: 0.7, filterFreq: 850, label: 'Medium' },
-        { rate: 1.00, gain: 0.7, bladePass: 120, amDepth: 1, filterFreq: 1050, label: 'High' }
+        { rate: 0.4, gain: 0.28, bladePass: 48, amDepth: 0.1, filterFreq: 650, label: 'Low' },
+        { rate: 0.7, gain: 0.49, bladePass: 84, amDepth: 0.175, filterFreq: 850, label: 'Medium' },
+        { rate: 1.00, gain: 0.7, bladePass: 120, amDepth: 0.25, filterFreq: 1050, label: 'High' }
       ],
       hum: null,
       motorPeak: { freq: 240, Q: 2.0, gain: 3 },
+      housing: { freq: 310, Q: 2.6, gain: 3.5 },
       turbRate: 1.4, turbDepth: 80
     },
     {
       key: 'ceiling', name: 'Ceiling Fan', pos: [0.0, 2.9, 0.0],
       beeps: true,
       levels: [
-        { rate: 0.28, gain: 0.40, bladePass: 6, amDepth: 0.06, filterFreq: 280, label: 'Low' },
-        { rate: 0.55, gain: 0.55, bladePass: 11, amDepth: 0.11, filterFreq: 380, label: 'Medium' },
-        { rate: 0.9, gain: 0.72, bladePass: 18, amDepth: 0.18, filterFreq: 500, label: 'High' }
+        { rate: 0.3, gain: 0.3, bladePass: 6, amDepth: 0.018, filterFreq: 180, label: 'Low' },
+        { rate: 0.65, gain: 0.65, bladePass: 13, amDepth: 0.039, filterFreq: 390, label: 'Medium' },
+        { rate: 1, gain: 0.8, bladePass: 20, amDepth: 0.06, filterFreq: 600, label: 'High' }
       ],
       hum: null,
       motorPeak: { freq: 95, Q: 3.0, gain: 5 },
+      housing: { freq: 135, Q: 3.0, gain: 3 },
       turbRate: 0.6, turbDepth: 20
     },
     {
-      key: 'computer', name: 'Computer Fan (CPU)', pos: [0.9, 0.55, -0.4],
+      key: 'computer', name: 'Computer Fan (CPU)', pos: [-0.3, 0.7, -0.4],
       beeps: false,
       levels: [
-        { rate: 0.2, gain: 0.02, bladePass: 60, amDepth: 0.04, filterFreq: 600, label: 'Idle · Cool' },
-        { rate: 0.6, gain: 0.06, bladePass: 180,  amDepth: 0.07, filterFreq: 1800, label: 'Load · Warm' },
-        { rate: 1.00, gain: 0.10, bladePass: 300, amDepth: 0.1, filterFreq: 3000, label: 'Hot · Throttling' }
+        { rate: 0.25, gain: 0.0125, bladePass: 80, amDepth: 0.08, filterFreq: 800, label: 'Idle · Cool' },
+        { rate: 0.66, gain: 0.033, bladePass: 240,  amDepth: 0.24, filterFreq: 1600, label: 'Load · Warm' },
+        { rate: 1.00, gain: 0.05, bladePass: 320, amDepth: 0.32, filterFreq: 3200, label: 'Hot · Throttling' }
       ],
       hum: null,
-      motorPeak: { freq: 3000, Q: 7.0, gain: 9 },
-      coilWhine: { freq: 6000, Q: 12, gain: 6 },
+      motorPeak: { freq: 3000, Q: 7.0, gain: 6 },
+      housing: { freq: 800, Q: 2.8, gain: 2 },
+      coilWhine: { freq: 6400, Q: 12, gain: 4 },
       turbRate: 2.5, turbDepth: 150
     }
   ];
@@ -217,8 +222,8 @@
 
       const hp = c.createBiquadFilter();
       hp.type = 'highpass';
-      hp.frequency.value = cfg.key === 'ceiling' ? 35 : (cfg.key === 'computer' ? 900 : 80);
-      hp.Q.value = 0.7;
+      hp.frequency.value = cfg.key === 'ceiling' ? 35 : (cfg.key === 'computer' ? 1600 : 80);
+      hp.Q.value = 0.8;
 
       const tone = c.createBiquadFilter();
       const drift = c.createBufferSource();
@@ -236,15 +241,23 @@
       if (cfg.key === 'ac') {
         tone.type = 'lowpass'; tone.frequency.value = 900; tone.Q.value = 0.6;
       } else if (cfg.key === 'desk') {
-        tone.type = 'lowpass'; tone.frequency.value = 1400; tone.Q.value = 0.7;
+        tone.type = 'lowpass'; tone.frequency.value = 1400; tone.Q.value = 0.5;
       } else if (cfg.key === 'tower') {
         tone.type = 'bandpass'; tone.frequency.value = 750; tone.Q.value = 1.0;
       } else if (cfg.key === 'ceiling') {
-        tone.type = 'lowpass'; tone.frequency.value = 380; tone.Q.value = 0.5;
+        tone.type = 'lowpass'; tone.frequency.value = 380; tone.Q.value = 0.4;
       } else {
-        tone.type = 'bandpass'; tone.frequency.value = 2600; tone.Q.value = 1.0;
+        tone.type = 'bandpass'; tone.frequency.value = 1800; tone.Q.value = 0.8;
       }
       this.nodes.tone = tone;
+
+      // ---------- Blade-pass spectral movement ----------
+      // Connection happens after bladeOsc is created.
+
+      const bladeFilterDepth = c.createGain();
+      bladeFilterDepth.gain.value = 0;
+
+      this.nodes.bladeFilterDepth = bladeFilterDepth;
 
       const peak = c.createBiquadFilter();
       peak.type = 'peaking';
@@ -252,6 +265,13 @@
       peak.Q.value = cfg.motorPeak.Q;
       peak.gain.value = cfg.motorPeak.gain;
       this.nodes.peak = peak;
+
+      const housing = c.createBiquadFilter();
+      housing.type = "peaking";
+      housing.frequency.value = cfg.housing.freq;
+      housing.Q.value = cfg.housing.Q;
+      housing.gain.value = cfg.housing.gain;
+      this.nodes.housing = housing;
 
       let coil = null;
       if (cfg.coilWhine) {
@@ -275,7 +295,23 @@
       turbLP.connect(turbDepth);
       turbDepth.connect(tone.frequency);
       this.nodes.turbNoise = turbNoise;
-
+      // ---------- Blade turbulence bursts ----------
+      // Filtered noise shaped by blade-rate pulses.
+      // Independent layer; joins master only after master exists.
+      const bladeTurbNoise = c.createBufferSource();
+      bladeTurbNoise.buffer = noiseBuffer;
+      bladeTurbNoise.loop = true;
+      const bladeTurbBand = c.createBiquadFilter();
+      bladeTurbBand.type = "bandpass";
+      bladeTurbBand.frequency.value = 900;
+      bladeTurbBand.Q.value = 0.8;
+      const bladeTurbGain = c.createGain();
+      bladeTurbGain.gain.value = 0;
+      bladeTurbNoise.connect(bladeTurbBand);
+      bladeTurbBand.connect(bladeTurbGain);
+      this.nodes.bladeTurbNoise = bladeTurbNoise;
+      this.nodes.bladeTurbBand = bladeTurbBand;
+      this.nodes.bladeTurbGain = bladeTurbGain;
       const amNoise = c.createBufferSource();
       amNoise.buffer = noiseBuffer;
       amNoise.loop = true;
@@ -301,6 +337,46 @@
       this.nodes.bladeOsc = bladeOsc;
       this.nodes.bladeDepth = bladeDepth;
       this.nodes.bladeOffset = bladeOffset;
+      // Connect blade-speed modulation to airflow spectrum.
+      bladeOsc.connect(bladeFilterDepth);
+      bladeFilterDepth.connect(tone.frequency);
+      // ---------- Harmonic blade-pass tones ----------
+      //
+      // These are extremely quiet. They aren't meant to sound like
+      // whistles—they simply give the ear a periodic rotor signature.
+      const bladeToneFund = c.createOscillator();
+      bladeToneFund.type = "sine";
+      const bladeTone2 = c.createOscillator();
+      bladeTone2.type = "sine";
+      const bladeTone3 = c.createOscillator();
+      bladeTone3.type = "triangle";
+      const bladeTone4 = c.createOscillator();
+      bladeTone4.type = "triangle";
+      const bladeToneGain = c.createGain();
+      bladeToneGain.gain.value = 0;
+      const bt1 = c.createGain();
+      const bt2 = c.createGain();
+      const bt3 = c.createGain();
+      const bt4 = c.createGain();
+      // Harmonic balance
+      bt1.gain.value = 0.030;
+      bt2.gain.value = 0.015;
+      bt3.gain.value = 0.009;
+      bt4.gain.value = 0.0045;
+      bladeToneFund.connect(bt1);
+      bladeTone2.connect(bt2);
+      bladeTone3.connect(bt3);
+      bladeTone4.connect(bt4);
+      bt1.connect(bladeToneGain);
+      bt2.connect(bladeToneGain);
+      bt3.connect(bladeToneGain);
+      bt4.connect(bladeToneGain);
+      // Inject alongside the existing airflow.
+      this.nodes.bladeToneFund = bladeToneFund;
+      this.nodes.bladeTone2 = bladeTone2;
+      this.nodes.bladeTone3 = bladeTone3;
+      this.nodes.bladeTone4 = bladeTone4;
+      this.nodes.bladeToneGain = bladeToneGain;
       amMix.connect(amGain.gain);
       this.nodes.amNoise = amNoise;
       this.nodes.amMix = amMix;
@@ -318,9 +394,126 @@
         this.nodes.humGain = humGain;
       }
 
+      // ---------- Motor harmonics ----------
+      const motorFund = c.createOscillator();
+      motorFund.type = "sine";
+
+      const motor2 = c.createOscillator();
+      motor2.type = "sine";
+
+      const motor3 = c.createOscillator();
+      motor3.type = "triangle";
+
+      const motorHarmonics = c.createGain();
+      motorHarmonics.gain.value = 0;
+
+      const mh1 = c.createGain();
+      const mh2 = c.createGain();
+      const mh3 = c.createGain();
+
+      mh1.gain.value = 0.020;
+      mh2.gain.value = 0.009;
+      mh3.gain.value = 0.004;
+
+      motorFund.connect(mh1);
+      motor2.connect(mh2);
+      motor3.connect(mh3);
+
+      mh1.connect(motorHarmonics);
+      mh2.connect(motorHarmonics);
+      mh3.connect(motorHarmonics);
+
+      this.nodes.motorFund = motorFund;
+      this.nodes.motor2 = motor2;
+      this.nodes.motor3 = motor3;
+      this.nodes.motorHarmonics = motorHarmonics;
+
+      // ---------- Bearing noise ----------
+      const bearingNoise = c.createBufferSource();
+      bearingNoise.buffer = noiseBuffer;
+      bearingNoise.loop = true;
+      const bearingHP = c.createBiquadFilter();
+      bearingHP.type = "highpass";
+      const bearingLP = c.createBiquadFilter();
+      bearingLP.type = "lowpass";
+      switch (cfg.key) {
+      case "computer":
+        bearingHP.frequency.value = 1800;
+        bearingLP.frequency.value = 9000;
+        break;
+      case "desk":
+        bearingHP.frequency.value = 900;
+        bearingLP.frequency.value = 4500;
+        break;
+      case "tower":
+        bearingHP.frequency.value = 600;
+        bearingLP.frequency.value = 3000;
+        break;
+      case "ceiling":
+        bearingHP.frequency.value = 250;
+        bearingLP.frequency.value = 1400;
+      break;
+      default:
+        bearingHP.frequency.value = 700;
+        bearingLP.frequency.value = 4200;
+      }
+      const bearingGain = c.createGain();
+      bearingGain.gain.value = 0;
+      bearingNoise.connect(bearingHP);
+      bearingHP.connect(bearingLP);
+      bearingLP.connect(bearingGain);
+      this.nodes.bearingNoise = bearingNoise;
+      this.nodes.bearingGain = bearingGain;
+
+      // ---------- Commutation artifacts ----------
+      const commNoise = c.createBufferSource();
+      commNoise.buffer = noiseBuffer;
+      commNoise.loop = true;
+      const commBand = c.createBiquadFilter();
+      commBand.type = "bandpass";
+      switch (cfg.key) {
+      case "computer":
+        commBand.frequency.value = 6000;
+        break;
+      case "desk":
+        commBand.frequency.value = 3200;
+        break;
+      case "tower":
+        commBand.frequency.value = 2500;
+        break;
+      case "ceiling":
+        commBand.frequency.value = 1400;
+        break;
+      default:
+        commBand.frequency.value = 2200;
+      }
+      commBand.Q.value = 2.5;
+      const commGain = c.createGain();
+      commGain.gain.value = 0;
+      const commOsc = c.createOscillator();
+      commOsc.type = "square";
+      const commDepth = c.createGain();
+      commDepth.gain.value = 0;
+      const commOffset = c.createConstantSource();
+      commOffset.offset.value = 0;
+      commNoise.connect(commBand);
+      commBand.connect(commGain);
+      commOsc.connect(commDepth);
+      commDepth.connect(commGain.gain);
+      commOffset.connect(commGain.gain);
+      this.nodes.commNoise = commNoise;
+      this.nodes.commBand = commBand;
+      this.nodes.commGain = commGain;
+      this.nodes.commOsc = commOsc;
+      this.nodes.commDepth = commDepth;
+      this.nodes.commOffset = commOffset;
+
       const master = c.createGain();
       master.gain.value = 0;
       this.nodes.master = master;
+
+      // Blade turbulence joins main fan output.
+      this.nodes.bladeTurbGain.connect(master);
 
       const panner = c.createPanner();
       panner.panningModel = 'HRTF';
@@ -334,10 +527,15 @@
       this.nodes.panner = panner;
 
       src.connect(hp); hp.connect(tone); tone.connect(peak);
-      let last = peak;
+      peak.connect(housing);
+      let last = housing;
       if (coil) { last.connect(coil); last = coil; }
       last.connect(amGain);
       amGain.connect(master);
+      bladeToneGain.connect(master);
+      motorHarmonics.connect(housing);
+      bearingGain.connect(master);
+      commGain.connect(master);
       if (humGain) humGain.connect(master);
       master.connect(panner);
       panner.connect(c.destination);
@@ -347,6 +545,12 @@
       const L = this.cfg.levels[this.level];
       const t = ctx.currentTime;
       const tau = immediate ? 0.01 : 0.5;
+      const motorBase = L.bladePass * 0.5;
+      this.nodes.motorFund.frequency.setTargetAtTime(motorBase, t, tau);
+      this.nodes.motor2.frequency.setTargetAtTime(motorBase * 2, t, tau);
+      this.nodes.motor3.frequency.setTargetAtTime(motorBase * 3, t, tau);
+      this.nodes.motorHarmonics.gain.setTargetAtTime(this.on ? (0.008 + this.level * 0.005) : 0, t, tau);
+      this.nodes.motorHarmonics.gain.setTargetAtTime( this.on ? (0.008 + this.level * 0.005) : 0, t, tau);
 
       this.nodes.src.playbackRate.cancelScheduledValues(t);
       if (immediate) this.nodes.src.playbackRate.setValueAtTime(L.rate, t);
@@ -360,8 +564,32 @@
 
       this.nodes.bladeOsc.frequency.setTargetAtTime(L.bladePass, t, tau);
 
+      // Blade turbulence intensity follows rotor speed.
+      this.nodes.bladeTurbBand.frequency.setTargetAtTime(L.bladePass * 8, t, tau);
+
+      this.nodes.bladeTurbGain.gain.setTargetAtTime(this.on ? L.amDepth * 0.18 : 0, t, tau);
+
+      const bearingLevel = this.on ? (0.003 + this.level * 0.003) : 0;
+      this.nodes.bearingGain.gain.setTargetAtTime( bearingLevel, t, tau);
+
+      this.nodes.commOsc.frequency.setTargetAtTime(L.bladePass * 2, t, tau);
+
+this.nodes.commDepth.gain.setTargetAtTime(
+    this.on ? 0.0015 + this.level * 0.0008 : 0,
+    t,
+    tau
+);
+      // Harmonic blade tones
+      this.nodes.bladeToneFund.frequency.setTargetAtTime(L.bladePass, t, tau);
+      this.nodes.bladeTone2.frequency.setTargetAtTime(L.bladePass * 2, t, tau);
+      this.nodes.bladeTone3.frequency.setTargetAtTime(L.bladePass * 3, t, tau);
+      this.nodes.bladeTone4.frequency.setTargetAtTime(L.bladePass * 4, t, tau);
+
       // subtle pressure pulses
       this.nodes.bladeDepth.gain.setTargetAtTime(L.amDepth * 0.3, t, tau);
+
+      // Blade passage brightens airflow slightly.
+      this.nodes.bladeFilterDepth.gain.setTargetAtTime(L.amDepth * 350, t, tau);
 
       this.nodes.tone.frequency.setTargetAtTime(L.filterFreq, t, tau);
 
@@ -373,6 +601,17 @@
         const coilGain = this.on ? this.cfg.coilWhine.gain * (this.level / 2) : 0;
         this.nodes.coil.gain.setTargetAtTime(coilGain, t, tau);
       }
+
+      // Blend in more rotor tone as speed increases.
+      const harmonicLevel =
+        this.on
+            ? (0.010 + this.level * 0.008)
+            : 0;
+      this.nodes.bladeToneGain.gain.setTargetAtTime(
+        harmonicLevel,
+        t,
+        tau
+      );
     }
 
     start() {
@@ -384,14 +623,26 @@
       this.nodes.src.start(t);
       this.nodes.amNoise.start(t);
       this.nodes.turbNoise.start(t);
+      this.nodes.bearingNoise.start(t);
+      this.nodes.commNoise.start(t);
+      this.nodes.commOsc.start(t);
+      this.nodes.commOffset.start(t);
+      this.nodes.bladeTurbNoise.start(t);
       this.nodes.bladeOsc.start(t);
+      this.nodes.bladeToneFund.start(t);
+      this.nodes.bladeTone2.start(t);
+      this.nodes.bladeTone3.start(t);
+      this.nodes.bladeTone4.start(t);
+      this.nodes.motorFund.start(t);
+      this.nodes.motor2.start(t);
+      this.nodes.motor3.start(t);
       this.nodes.bladeOffset.start(t);
       this.nodes.drift.start(t);
       if (this.nodes.humOsc) this.nodes.humOsc.start(t);
 
       this.nodes.src.playbackRate.cancelScheduledValues(t);
-      this.nodes.src.playbackRate.setValueAtTime(0.1, t);
-      this.nodes.src.playbackRate.exponentialRampToValueAtTime(L.rate, t + 1.5);
+      this.nodes.src.playbackRate.setValueAtTime(0.01, t);
+      this.nodes.src.playbackRate.exponentialRampToValueAtTime(L.rate, t + 2.0);
 
       this.nodes.master.gain.cancelScheduledValues(t);
       this.nodes.master.gain.setValueAtTime(0, t);
@@ -414,7 +665,7 @@
 
       this.nodes.master.gain.cancelScheduledValues(t);
       this.nodes.master.gain.setValueAtTime(this.nodes.master.gain.value, t);
-      this.nodes.master.gain.linearRampToValueAtTime(0.0, t + 2.4);
+      this.nodes.master.gain.linearRampToValueAtTime(0.0, t + 2.2);
 
       if (this.nodes.humGain) {
         this.nodes.humGain.gain.cancelScheduledValues(t);
@@ -453,6 +704,30 @@ startFlutter() {
       0.8
     );
 
+    this.nodes.bladeToneFund.frequency.setTargetAtTime(
+      bladeBase * bladeFlutter,
+      ctx.currentTime,
+      0.8
+    );
+
+    this.nodes.bladeTone2.frequency.setTargetAtTime(
+      bladeBase * 2 * bladeFlutter,
+      ctx.currentTime,
+      0.8
+    );
+
+    this.nodes.bladeTone3.frequency.setTargetAtTime(
+      bladeBase * 3 * bladeFlutter,
+      ctx.currentTime,
+      0.8
+    );
+
+    this.nodes.bladeTone4.frequency.setTargetAtTime(
+      bladeBase * 4 * bladeFlutter,
+      ctx.currentTime,
+      0.8
+    );
+
     this.flutterTimer = setTimeout(
       update,
       600 + Math.random() * 1200
@@ -477,18 +752,17 @@ stopFlutter() {
     }
   }
 
-  function beep() {
-    if (!ctx) return;
+  Fan.prototype.beep = function () {
     const t = ctx.currentTime;
     const osc = ctx.createOscillator();
     const g = ctx.createGain();
-    osc.type = 'sine';
+    osc.type = 'triangle';
     osc.frequency.setValueAtTime(2000, t);
     g.gain.setValueAtTime(0, t);
-    g.gain.linearRampToValueAtTime(0.18, t + 0.008);
-    g.gain.exponentialRampToValueAtTime(0.001, t + 0.11);
-    osc.connect(g); g.connect(ctx.destination);
-    osc.start(t); osc.stop(t + 0.13);
+    g.gain.linearRampToValueAtTime(0.3, t + 0.008);
+    g.gain.exponentialRampToValueAtTime(0.001, t + 1.0);
+    osc.connect(g); g.connect(this.nodes.panner);
+    osc.start(t); osc.stop(t + 1.0);
   }
 
   const fans = [];
@@ -542,19 +816,19 @@ stopFlutter() {
     } else if (e.key === 'ArrowUp') {
       const f = fans[selected];
       f.setLevel(f.level + 1);
-      if (f.cfg.beeps && f.on) beep();
+      if (f.cfg.beeps && f.on) f.beep();
       render();
       e.preventDefault();
     } else if (e.key === 'ArrowDown') {
       const f = fans[selected];
       f.setLevel(f.level - 1);
-      if (f.cfg.beeps && f.on) beep();
+      if (f.cfg.beeps && f.on) f.beep();
       render();
       e.preventDefault();
     } else if (e.key === 'Enter') {
       const f = fans[selected];
       if (f.on) f.stop(); else f.start();
-      if (f.cfg.beeps) beep();
+      if (f.cfg.beeps) f.beep();
       render();
       e.preventDefault();
     } else if (e.key === 'ArrowLeft') {
